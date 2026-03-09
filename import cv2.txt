@@ -1,0 +1,58 @@
+import cv2
+from ultralytics import YOLO
+
+# Load YOLOv8 nano model
+model = YOLO("yolov8n.pt")
+
+# Trash-like classes from COCO dataset
+TRASH_CLASSES = ["bottle", "cup", "wine glass", "fork", "knife", "spoon", "bowl",
+                 "banana", "apple", "orange", "broccoli", "carrot", "pizza", "donut", "cake"]
+
+# Open camera
+cap = cv2.VideoCapture(0)
+
+while True:
+    ret, frame = cap.read()
+    if not ret:
+        break
+
+    # Run detection
+    results = model(frame)
+
+    # Copy frame for annotation
+    annotated_frame = frame.copy()
+
+    for box in results[0].boxes:
+        cls_id = int(box.cls[0])
+        label = model.names[cls_id]
+
+        if label in TRASH_CLASSES:
+            xyxy = box.xyxy[0].cpu().numpy().astype(int)
+            conf = float(box.conf[0])
+            x1, y1, x2, y2 = xyxy
+
+            # Draw bounding box
+            cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            cv2.putText(annotated_frame, f"{label} {conf:.2f}", (x1, y1 - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
+            # Calculate center of object
+            center_x = int((x1 + x2) / 2)
+            center_y = int((y1 + y2) / 2)
+
+            # Draw center point
+            cv2.circle(annotated_frame, (center_x, center_y), 5, (0, 0, 255), -1)
+            cv2.putText(annotated_frame, f"Center: ({center_x}, {center_y})",
+                        (center_x + 10, center_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+
+            # 🟢 This (center_x, center_y) will later be used to move the wheels
+
+    # Show video
+    cv2.imshow("Smart Trash Bin - Trash Detection & Tracking", annotated_frame)
+
+    # Quit with 'q'
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+cap.release()
+cv2.destroyAllWindows()
